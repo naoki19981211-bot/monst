@@ -1,0 +1,1373 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="反射シミュ">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#c62828">
+  <meta name="description" content="モンストの反射軌道を予測するシミュレーター">
+  <link rel="manifest" href="data:application/manifest+json,{"name":"モンスト反射軌道シミュレーター","short_name":"反射シミュ","start_url":".","display":"standalone","background_color":"#0d0d12","theme_color":"#c62828","orientation":"any"}">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%23c62828'/%3E%3Ctext x='90' y='115' font-size='90' text-anchor='middle' fill='white'%3E⚡%3C/text%3E%3C/svg%3E">
+  <title>モンスト 反射軌道シミュレーター</title>
+  <style>
+    :root {
+      --bg: #0d0d12;
+      --panel: #16161e;
+      --accent: #e53935;
+      --accent2: #ff9800;
+      --text: #f0f0f5;
+      --muted: #8888a0;
+      --border: #2a2a38;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      background: linear-gradient(90deg, #c62828, #e65100);
+      padding: 10px 14px;
+      padding-top: calc(10px + env(safe-area-inset-top));
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      z-index: 20;
+    }
+
+    .header h1 {
+      font-size: 1rem;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .header .badge {
+      font-size: 0.6rem;
+      background: rgba(255,255,255,0.25);
+      padding: 2px 7px;
+      border-radius: 10px;
+    }
+
+    .toolbar {
+      background: var(--panel);
+      padding: 8px 10px;
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      flex-shrink: 0;
+      border-bottom: 1px solid var(--border);
+      z-index: 15;
+    }
+
+    .tool-btn {
+      flex-shrink: 0;
+      background: #22222e;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 7px 12px;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+
+    .tool-btn:active, .tool-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .tool-btn.secondary {
+      background: #1e1e28;
+    }
+
+    .tool-btn.edge-on {
+      background: #1565c0;
+      border-color: #1565c0;
+    }
+
+    .main {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background: #111;
+    }
+
+    #canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+
+    .controls {
+      background: var(--panel);
+      padding: 10px 12px;
+      padding-bottom: calc(10px + env(safe-area-inset-bottom));
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+      z-index: 15;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .control-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .control-row label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      min-width: 70px;
+    }
+
+    .control-row input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent);
+    }
+
+    .control-row .value {
+      font-size: 0.8rem;
+      font-weight: 700;
+      min-width: 36px;
+      text-align: right;
+    }
+
+    .mode-indicator {
+      font-size: 0.7rem;
+      color: var(--accent2);
+      text-align: center;
+      margin-top: 6px;
+    }
+
+    .help-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      z-index: 50;
+      text-align: center;
+    }
+
+    .help-overlay.hidden {
+      display: none;
+    }
+
+    .help-overlay h2 {
+      font-size: 1.2rem;
+      margin-bottom: 16px;
+    }
+
+    .help-overlay ol {
+      text-align: left;
+      font-size: 0.85rem;
+      line-height: 1.7;
+      color: #ccc;
+      max-width: 340px;
+    }
+
+    .help-overlay button {
+      margin-top: 20px;
+      background: var(--accent);
+      border: none;
+      color: white;
+      padding: 10px 28px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    #fileInput {
+      display: none;
+    }
+
+    .note {
+      font-size: 0.65rem;
+      color: var(--muted);
+      text-align: center;
+      margin-top: 4px;
+    }
+
+    .status-msg {
+      font-size: 0.7rem;
+      color: #64b5f6;
+      text-align: center;
+      min-height: 16px;
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <h1>
+      <span>⚡</span> 反射軌道シミュレーター
+      <span class="badge">β</span>
+    </h1>
+  </header>
+
+  <div class="toolbar">
+    <button class="tool-btn" id="btnUpload">📷 スクショ読込</button>
+    <button class="tool-btn" id="btnChar">👾 キャラ</button>
+    <button class="tool-btn active" id="btnAim">🎯 軌道予測</button>
+    <button class="tool-btn secondary" id="btnConfirmPath">✓ 軌道確定</button>
+    <button class="tool-btn" id="btnEdge">🔍 エッジ検出</button>
+    <button class="tool-btn" id="btnHWall">━ 上下壁</button>
+    <button class="tool-btn" id="btnVWall">┃ 左右壁</button>
+    <button class="tool-btn" id="btnBlock">📦 ブロック</button>
+    <button class="tool-btn secondary" id="btnFixWalls">📌 壁を固定</button>
+    <button class="tool-btn secondary" id="btnClearBlocks">全消</button>
+    <button class="tool-btn secondary" id="btnHelp">？</button>
+  </div>
+
+  <div class="main">
+    <canvas id="canvas"></canvas>
+
+    <div class="help-overlay" id="helpOverlay">
+      <h2>使い方</h2>
+      <ol>
+        <li><strong>スクショ読込</strong> … ゲーム画面を読み込み</li>
+        <li><strong>エッジ検出</strong> … 壁っぽい線を薄く表示</li>
+        <li><strong>上下壁 / 左右壁</strong> … 画面を上下（or左右）にドラッグして壁の位置を決める。水平・垂直の線が出ます</li>
+        <li><strong>ブロック</strong> … 内部の障害物を配置（タップ追加・ドラッグ移動・ダブルタップ削除）</li>
+        <li><strong>キャラ</strong> … モンスターの位置をタップ</li>
+        <li><strong>軌道予測</strong> … 上下左右の壁をタップして1反射目を指定、またはスワイプで方向指定</li>
+      </ol>
+      <p style="margin-top:14px;font-size:0.75rem;color:#aaa;">
+        ※ 実際のモンストと完全一致するわけではありません。<br>
+        参考程度にご利用ください。
+      </p>
+      <button id="btnCloseHelp">はじめる</button>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="control-row">
+      <label>反射回数</label>
+      <input type="range" id="bounceRange" min="1" max="12" value="6">
+      <span class="value" id="bounceValue">6</span>
+    </div>
+    <div class="control-row">
+      <label>線の太さ</label>
+      <input type="range" id="lineWidthRange" min="1" max="6" value="3">
+      <span class="value" id="lineWidthValue">3</span>
+    </div>
+    <div class="control-row">
+      <label>エッジ感度</label>
+      <input type="range" id="edgeThreshold" min="20" max="120" value="50">
+      <span class="value" id="edgeThresholdValue">50</span>
+    </div>
+    <div class="mode-indicator" id="modeText">モード: 軌道予測（キャラからスワイプ）</div>
+    <div class="status-msg" id="statusMsg"></div>
+    <p class="note">非公式ツールです。精度は参考程度にお考えください。</p>
+  </div>
+
+  <input type="file" id="fileInput" accept="image/*,.png,.jpg,.jpeg,.heic,.webp">
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // State
+    let bgImage = null;
+    let edgeCanvas = null;
+    let showEdges = false;
+    let blocks = [];
+
+    // Fixed outer walls (in image coordinates)
+    // null means "use image edge"
+    let topWallY = null;      // y of top wall line
+    let bottomWallY = null;   // y of bottom wall line
+    let leftWallX = null;
+    let rightWallX = null;
+    let lastImageSize = null; // {w, h} of last image used for walls
+
+    // Temporary while dragging wall lines
+    let tempWallY = null;
+    let tempWallX = null;
+    let wallDragType = null; // 'top' | 'bottom' | 'left' | 'right' | null
+
+    // ---- 壁位置の固定（ファイル内蔵 + localStorage） ----
+    // ※ ローカルHTMLでは localStorage が消えることがあるため、
+    //    デフォルト比率をここに持たせる。壁を動かしたら
+    //    「壁を固定」でこの値を更新したファイルを保存し直してください。
+    // ユーザー指定のゲーム画面に合わせた壁位置（2026-11-06 微調整5）
+    // 上OK / 下を気持ち下に戻す
+    const DEFAULT_WALL_RATIOS = {
+      top: 0.19000,
+      bottom: 0.67500,
+      left: 0.03663,
+      right: 0.96093
+    };
+
+    const WALL_STORAGE_KEY = 'monst_reflect_walls_v9';
+
+    function getCurrentRatios() {
+      if (!lastImageSize || !lastImageSize.w || !lastImageSize.h) return null;
+      return {
+        top: topWallY !== null ? topWallY / lastImageSize.h : DEFAULT_WALL_RATIOS.top,
+        bottom: bottomWallY !== null ? bottomWallY / lastImageSize.h : DEFAULT_WALL_RATIOS.bottom,
+        left: leftWallX !== null ? leftWallX / lastImageSize.w : DEFAULT_WALL_RATIOS.left,
+        right: rightWallX !== null ? rightWallX / lastImageSize.w : DEFAULT_WALL_RATIOS.right
+      };
+    }
+
+    function saveWalls() {
+      try {
+        const ratios = getCurrentRatios();
+        if (!ratios) return;
+        localStorage.setItem(WALL_STORAGE_KEY, JSON.stringify(ratios));
+      } catch (e) { /* ignore */ }
+    }
+
+    function applyWallRatios(imgW, imgH) {
+      // 1) localStorage を優先
+      try {
+        const raw = localStorage.getItem(WALL_STORAGE_KEY);
+        if (raw) {
+          const data = JSON.parse(raw);
+          if (typeof data.top === 'number') topWallY = data.top * imgH;
+          if (typeof data.bottom === 'number') bottomWallY = data.bottom * imgH;
+          if (typeof data.left === 'number') leftWallX = data.left * imgW;
+          if (typeof data.right === 'number') rightWallX = data.right * imgW;
+          return true;
+        }
+      } catch (e) { /* ignore */ }
+
+      // 2) ファイルに内蔵されたデフォルト比率を使う
+      topWallY = DEFAULT_WALL_RATIOS.top * imgH;
+      bottomWallY = DEFAULT_WALL_RATIOS.bottom * imgH;
+      leftWallX = DEFAULT_WALL_RATIOS.left * imgW;
+      rightWallX = DEFAULT_WALL_RATIOS.right * imgW;
+      return true;
+    }
+
+    // 現在の壁比率を埋め込んだHTMLをダウンロード（完全固定用）
+    function downloadFixedHtml() {
+      const ratios = getCurrentRatios();
+      if (!ratios) {
+        statusMsg.textContent = '先にスクショを読み込んで壁を合わせてください';
+        return;
+      }
+
+      // 現在のHTMLを取得して DEFAULT_WALL_RATIOS を書き換える
+      const html = document.documentElement.outerHTML;
+      const newDefault = `const DEFAULT_WALL_RATIOS = {
+      top: ${ratios.top.toFixed(5)},
+      bottom: ${ratios.bottom.toFixed(5)},
+      left: ${ratios.left.toFixed(5)},
+      right: ${ratios.right.toFixed(5)}
+    };`;
+
+      const replaced = html.replace(
+        /const DEFAULT_WALL_RATIOS = \{[\s\S]*?\};/,
+        newDefault
+      );
+
+      const blob = new Blob([replaced], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'monst_reflect_simulator.html';
+      a.click();
+      URL.revokeObjectURL(url);
+      statusMsg.textContent = '壁位置を固定したファイルを保存しました。このファイルを使ってください';
+    }
+
+    let charPos = null;
+    let aimDir = null;
+    let firstHitPoint = null; // 1反射目の壁上の点 {x,y}
+    let firstHitWall = null;  // 'top' | 'bottom' | 'left' | 'right'
+    let draggingFirstHit = false; // 1反射目を壁に沿ってドラッグ中
+    let pathConfirmed = false; // 軌道確定後は番号非表示＋拡大
+    let isDragging = false;
+    let dragStart = null;
+    let selectedBlock = null;
+    let mode = 'aim'; // 'hwall' | 'vwall' | 'block' | 'char' | 'aim'
+    let maxBounces = 6;
+    let lineWidth = 3;
+    let edgeThreshold = 50;
+    let scale = 1;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    function fitToImage() {
+      if (!bgImage) return;
+      const main = document.querySelector('.main');
+      const scaleX = main.clientWidth / bgImage.width;
+      const scaleY = main.clientHeight / bgImage.height;
+      scale = Math.min(scaleX, scaleY);
+      offsetX = (main.clientWidth - bgImage.width * scale) / 2;
+      offsetY = (main.clientHeight - bgImage.height * scale) / 2;
+    }
+
+    // 壁で囲まれた盤面を拡大表示
+    function fitToBoard() {
+      if (!bgImage) return;
+      const main = document.querySelector('.main');
+      const fieldW = bgImage.width;
+      const fieldH = bgImage.height;
+      const tY = topWallY !== null ? topWallY : 0;
+      const bY = bottomWallY !== null ? bottomWallY : fieldH;
+      const lX = leftWallX !== null ? leftWallX : 0;
+      const rX = rightWallX !== null ? rightWallX : fieldW;
+      // 少し余白を持たせる
+      const padX = (rX - lX) * 0.04;
+      const padY = (bY - tY) * 0.04;
+      const x0 = Math.max(0, lX - padX);
+      const y0 = Math.max(0, tY - padY);
+      const x1 = Math.min(fieldW, rX + padX);
+      const y1 = Math.min(fieldH, bY + padY);
+      const bw = Math.max(1, x1 - x0);
+      const bh = Math.max(1, y1 - y0);
+      const scaleX = main.clientWidth / bw;
+      const scaleY = main.clientHeight / bh;
+      scale = Math.min(scaleX, scaleY);
+      offsetX = (main.clientWidth - bw * scale) / 2 - x0 * scale;
+      offsetY = (main.clientHeight - bh * scale) / 2 - y0 * scale;
+    }
+
+    function resize() {
+      const main = document.querySelector('.main');
+      canvas.width = main.clientWidth * devicePixelRatio;
+      canvas.height = main.clientHeight * devicePixelRatio;
+      canvas.style.width = main.clientWidth + 'px';
+      canvas.style.height = main.clientHeight + 'px';
+      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+      draw();
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    const btnHWall = document.getElementById('btnHWall');
+    const btnVWall = document.getElementById('btnVWall');
+    const btnBlock = document.getElementById('btnBlock');
+    const btnChar = document.getElementById('btnChar');
+    const btnAim = document.getElementById('btnAim');
+    const btnEdge = document.getElementById('btnEdge');
+    const modeText = document.getElementById('modeText');
+    const statusMsg = document.getElementById('statusMsg');
+
+    function setMode(m) {
+      mode = m;
+      [btnHWall, btnVWall, btnBlock, btnChar, btnAim].forEach(b => b.classList.remove('active'));
+      if (m === 'hwall') {
+        btnHWall.classList.add('active');
+        modeText.textContent = 'モード: 上下壁（画面を上下にドラッグして線を合わせる）';
+        statusMsg.textContent = '上壁 → 下壁 の順に線を置いてください';
+      } else if (m === 'vwall') {
+        btnVWall.classList.add('active');
+        modeText.textContent = 'モード: 左右壁（画面を左右にドラッグして線を合わせる）';
+        statusMsg.textContent = '左壁 → 右壁 の順に線を置いてください';
+      } else if (m === 'block') {
+        btnBlock.classList.add('active');
+        modeText.textContent = 'モード: ブロック配置（タップ追加 / ドラッグ移動 / ダブルタップ削除）';
+        statusMsg.textContent = '';
+      } else if (m === 'char') {
+        btnChar.classList.add('active');
+        modeText.textContent = 'モード: キャラ配置（タップで位置決定）';
+        statusMsg.textContent = '';
+      } else {
+        btnAim.classList.add('active');
+        modeText.textContent = 'モード: 軌道予測（壁タップ→点をスライドで微調整）';
+        statusMsg.textContent = charPos
+          ? '壁をタップで1反射目指定。水色の点をドラッグで微調整可'
+          : '先にキャラを配置してください';
+      }
+    }
+
+    // タップ位置を最も近い外壁上の点に投影
+    function projectToNearestWall(imgP) {
+      const fieldW = bgImage ? bgImage.width : 1000;
+      const fieldH = bgImage ? bgImage.height : 1500;
+      const tY = topWallY !== null ? topWallY : 0;
+      const bY = bottomWallY !== null ? bottomWallY : fieldH;
+      const lX = leftWallX !== null ? leftWallX : 0;
+      const rX = rightWallX !== null ? rightWallX : fieldW;
+
+      // 各壁への距離（画像座標）
+      const candidates = [
+        { x: Math.max(lX, Math.min(rX, imgP.x)), y: tY, wall: 'top', dist: Math.abs(imgP.y - tY) },
+        { x: Math.max(lX, Math.min(rX, imgP.x)), y: bY, wall: 'bottom', dist: Math.abs(imgP.y - bY) },
+        { x: lX, y: Math.max(tY, Math.min(bY, imgP.y)), wall: 'left', dist: Math.abs(imgP.x - lX) },
+        { x: rX, y: Math.max(tY, Math.min(bY, imgP.y)), wall: 'right', dist: Math.abs(imgP.x - rX) }
+      ];
+      candidates.sort((a, b) => a.dist - b.dist);
+      const best = candidates[0];
+      // 画面上でだいたい壁の近く（画像座標で幅の15%以内）なら採用
+      const threshold = Math.min(fieldW, fieldH) * 0.15;
+      if (best.dist > threshold) return null;
+      return { x: best.x, y: best.y, wall: best.wall };
+    }
+
+    function setAimFromFirstHit(hit) {
+      if (!charPos || !hit) return;
+      const dx = hit.x - charPos.x;
+      const dy = hit.y - charPos.y;
+      const len = Math.hypot(dx, dy) || 1;
+      aimDir = { dx: dx / len, dy: dy / len };
+      firstHitPoint = { x: hit.x, y: hit.y };
+      firstHitWall = hit.wall || firstHitWall;
+      if (pathConfirmed) setPathConfirmed(false);
+    }
+
+    function getWallBounds() {
+      const fieldW = bgImage ? bgImage.width : 1000;
+      const fieldH = bgImage ? bgImage.height : 1500;
+      return {
+        tY: topWallY !== null ? topWallY : 0,
+        bY: bottomWallY !== null ? bottomWallY : fieldH,
+        lX: leftWallX !== null ? leftWallX : 0,
+        rX: rightWallX !== null ? rightWallX : fieldW
+      };
+    }
+
+    // 1反射目を壁に沿って移動（上下壁→左右、左右壁→上下）
+    function moveFirstHitAlongWall(imgP) {
+      if (!firstHitPoint || !firstHitWall) return;
+      const { tY, bY, lX, rX } = getWallBounds();
+      let x = firstHitPoint.x;
+      let y = firstHitPoint.y;
+      if (firstHitWall === 'top') {
+        x = Math.max(lX, Math.min(rX, imgP.x));
+        y = tY;
+      } else if (firstHitWall === 'bottom') {
+        x = Math.max(lX, Math.min(rX, imgP.x));
+        y = bY;
+      } else if (firstHitWall === 'left') {
+        x = lX;
+        y = Math.max(tY, Math.min(bY, imgP.y));
+      } else if (firstHitWall === 'right') {
+        x = rX;
+        y = Math.max(tY, Math.min(bY, imgP.y));
+      }
+      setAimFromFirstHit({ x, y, wall: firstHitWall });
+    }
+
+    function hitFirstHitMarker(px, py) {
+      if (!firstHitPoint || pathConfirmed) return false;
+      const s = toScreenCoords(firstHitPoint);
+      return Math.hypot(px - s.x, py - s.y) < 28;
+    }
+
+    btnHWall.addEventListener('click', () => setMode('hwall'));
+    btnVWall.addEventListener('click', () => setMode('vwall'));
+    btnBlock.addEventListener('click', () => setMode('block'));
+    btnChar.addEventListener('click', () => setMode('char'));
+    btnAim.addEventListener('click', () => setMode('aim'));
+
+    // Upload（iOS対策：valueリセット + エラー表示 + createObjectURL）
+    document.getElementById('btnUpload').addEventListener('click', () => {
+      const input = document.getElementById('fileInput');
+      // 同じファイルを連続選択できるように毎回クリア
+      input.value = '';
+      input.click();
+    });
+
+    document.getElementById('fileInput').addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) {
+        statusMsg.textContent = 'ファイルが選択されませんでした';
+        return;
+      }
+      if (!file.type.startsWith('image/')) {
+        statusMsg.textContent = '画像ファイルを選んでください（PNG / JPG）';
+        return;
+      }
+
+      statusMsg.textContent = '読み込み中...';
+
+      const img = new Image();
+      img.onload = () => {
+        bgImage = img;
+        edgeCanvas = null;
+        showEdges = false;
+        btnEdge.classList.remove('edge-on');
+        tempWallY = null;
+        tempWallX = null;
+
+        applyWallRatios(img.width, img.height);
+
+        topWallY = Math.max(0, Math.min(topWallY, img.height));
+        bottomWallY = Math.max(0, Math.min(bottomWallY, img.height));
+        leftWallX = Math.max(0, Math.min(leftWallX, img.width));
+        rightWallX = Math.max(0, Math.min(rightWallX, img.width));
+
+        lastImageSize = { w: img.width, h: img.height };
+        saveWalls();
+
+        statusMsg.textContent = '読み込み完了（ずれていれば ━ 上下壁 で調整）';
+
+        const main = document.querySelector('.main');
+        const scaleX = main.clientWidth / img.width;
+        const scaleY = main.clientHeight / img.height;
+        scale = Math.min(scaleX, scaleY);
+        offsetX = (main.clientWidth - img.width * scale) / 2;
+        offsetY = (main.clientHeight - img.height * scale) / 2;
+        draw();
+      };
+      img.onerror = () => {
+        statusMsg.textContent = '画像の読み込みに失敗しました。別の画像を試してください';
+      };
+
+      // iOSでも安定しやすい createObjectURL を優先
+      try {
+        const url = URL.createObjectURL(file);
+        img.onload = (function(originalOnload) {
+          return function() {
+            URL.revokeObjectURL(url);
+            originalOnload();
+          };
+        })(img.onload);
+        img.src = url;
+      } catch (err) {
+        // フォールバック
+        const reader = new FileReader();
+        reader.onload = (ev) => { img.src = ev.target.result; };
+        reader.onerror = () => {
+          statusMsg.textContent = 'ファイル読み込みに失敗しました';
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    // Edge detection
+    function computeEdges() {
+      if (!bgImage) {
+        statusMsg.textContent = '先にスクショを読み込んでください';
+        return;
+      }
+      statusMsg.textContent = 'エッジ検出中...';
+
+      const maxDim = 800;
+      let tw = bgImage.width;
+      let th = bgImage.height;
+      if (tw > maxDim || th > maxDim) {
+        const r = Math.min(maxDim / tw, maxDim / th);
+        tw = Math.floor(tw * r);
+        th = Math.floor(th * r);
+      }
+
+      const tmp = document.createElement('canvas');
+      tmp.width = tw;
+      tmp.height = th;
+      const tctx = tmp.getContext('2d');
+      tctx.drawImage(bgImage, 0, 0, tw, th);
+
+      const imageData = tctx.getImageData(0, 0, tw, th);
+      const data = imageData.data;
+      const gray = new Float32Array(tw * th);
+
+      for (let i = 0; i < tw * th; i++) {
+        const r = data[i * 4];
+        const g = data[i * 4 + 1];
+        const b = data[i * 4 + 2];
+        gray[i] = 0.299 * r + 0.587 * g + 0.114 * b;
+      }
+
+      const gxKernel = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
+      const gyKernel = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
+      const mag = new Float32Array(tw * th);
+
+      for (let y = 1; y < th - 1; y++) {
+        for (let x = 1; x < tw - 1; x++) {
+          let gx = 0, gy = 0;
+          let k = 0;
+          for (let ky = -1; ky <= 1; ky++) {
+            for (let kx = -1; kx <= 1; kx++) {
+              const val = gray[(y + ky) * tw + (x + kx)];
+              gx += val * gxKernel[k];
+              gy += val * gyKernel[k];
+              k++;
+            }
+          }
+          mag[y * tw + x] = Math.sqrt(gx * gx + gy * gy);
+        }
+      }
+
+      edgeCanvas = document.createElement('canvas');
+      edgeCanvas.width = bgImage.width;
+      edgeCanvas.height = bgImage.height;
+      const ectx = edgeCanvas.getContext('2d');
+
+      const edgeImg = ectx.createImageData(tw, th);
+      const ed = edgeImg.data;
+      const thresh = edgeThreshold;
+
+      for (let i = 0; i < tw * th; i++) {
+        const m = mag[i];
+        if (m > thresh) {
+          const alpha = Math.min(255, Math.floor((m - thresh) * 3));
+          ed[i * 4] = 100;
+          ed[i * 4 + 1] = 220;
+          ed[i * 4 + 2] = 255;
+          ed[i * 4 + 3] = alpha;
+        } else {
+          ed[i * 4 + 3] = 0;
+        }
+      }
+
+      const edgeTmp = document.createElement('canvas');
+      edgeTmp.width = tw;
+      edgeTmp.height = th;
+      edgeTmp.getContext('2d').putImageData(edgeImg, 0, 0);
+
+      ectx.clearRect(0, 0, edgeCanvas.width, edgeCanvas.height);
+      ectx.drawImage(edgeTmp, 0, 0, bgImage.width, bgImage.height);
+
+      showEdges = true;
+      btnEdge.classList.add('edge-on');
+      statusMsg.textContent = 'エッジ表示中（もう一度押すとOFF）';
+      draw();
+    }
+
+    btnEdge.addEventListener('click', () => {
+      if (showEdges) {
+        showEdges = false;
+        btnEdge.classList.remove('edge-on');
+        statusMsg.textContent = '';
+        draw();
+      } else {
+        computeEdges();
+      }
+    });
+
+    document.getElementById('btnFixWalls').addEventListener('click', () => {
+      saveWalls();
+      downloadFixedHtml();
+    });
+
+    const btnConfirmPath = document.getElementById('btnConfirmPath');
+    function setPathConfirmed(on) {
+      pathConfirmed = on;
+      if (on) {
+        btnConfirmPath.classList.add('edge-on');
+        btnConfirmPath.textContent = '↩ 確定解除';
+        fitToBoard();
+        statusMsg.textContent = '軌道確定：番号・壁線を非表示・盤面を拡大中（もう一度押すと戻る）';
+      } else {
+        btnConfirmPath.classList.remove('edge-on');
+        btnConfirmPath.textContent = '✓ 軌道確定';
+        fitToImage();
+        statusMsg.textContent = '確定を解除しました';
+      }
+      draw();
+    }
+    btnConfirmPath.addEventListener('click', () => {
+      if (!charPos || !aimDir) {
+        statusMsg.textContent = '先に軌道を表示してください';
+        return;
+      }
+      setPathConfirmed(!pathConfirmed);
+    });
+
+    document.getElementById('btnClearBlocks').addEventListener('click', () => {
+      // Only clear internal blocks. Outer walls stay fixed.
+      blocks = [];
+      tempWallY = null;
+      tempWallX = null;
+      statusMsg.textContent = 'ブロックを消去しました（上下・左右の壁はそのまま）';
+      draw();
+    });
+
+    document.getElementById('btnHelp').addEventListener('click', () => {
+      document.getElementById('helpOverlay').classList.remove('hidden');
+    });
+    document.getElementById('btnCloseHelp').addEventListener('click', () => {
+      document.getElementById('helpOverlay').classList.add('hidden');
+    });
+
+    document.getElementById('bounceRange').addEventListener('input', (e) => {
+      maxBounces = parseInt(e.target.value);
+      document.getElementById('bounceValue').textContent = maxBounces;
+      draw();
+    });
+    document.getElementById('lineWidthRange').addEventListener('input', (e) => {
+      lineWidth = parseInt(e.target.value);
+      document.getElementById('lineWidthValue').textContent = lineWidth;
+      draw();
+    });
+    document.getElementById('edgeThreshold').addEventListener('input', (e) => {
+      edgeThreshold = parseInt(e.target.value);
+      document.getElementById('edgeThresholdValue').textContent = edgeThreshold;
+      if (showEdges && bgImage) computeEdges();
+    });
+
+    // Helpers
+    function getPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      return { x: clientX - rect.left, y: clientY - rect.top };
+    }
+
+    function toImageCoords(p) {
+      return {
+        x: (p.x - offsetX) / scale,
+        y: (p.y - offsetY) / scale
+      };
+    }
+
+    function toScreenCoords(p) {
+      return {
+        x: p.x * scale + offsetX,
+        y: p.y * scale + offsetY
+      };
+    }
+
+    function hitBlock(px, py) {
+      for (let i = blocks.length - 1; i >= 0; i--) {
+        const b = blocks[i];
+        const s = toScreenCoords({x: b.x, y: b.y});
+        const w = b.w * scale;
+        const h = b.h * scale;
+        if (px >= s.x && px <= s.x + w && py >= s.y && py <= s.y + h) return i;
+      }
+      return -1;
+    }
+
+    // Hit test for existing wall lines (for dragging them later)
+    function hitWallLine(px, py) {
+      const threshold = 12; // pixels
+      if (topWallY !== null) {
+        const sy = toScreenCoords({x: 0, y: topWallY}).y;
+        if (Math.abs(py - sy) < threshold) return 'top';
+      }
+      if (bottomWallY !== null) {
+        const sy = toScreenCoords({x: 0, y: bottomWallY}).y;
+        if (Math.abs(py - sy) < threshold) return 'bottom';
+      }
+      if (leftWallX !== null) {
+        const sx = toScreenCoords({x: leftWallX, y: 0}).x;
+        if (Math.abs(px - sx) < threshold) return 'left';
+      }
+      if (rightWallX !== null) {
+        const sx = toScreenCoords({x: rightWallX, y: 0}).x;
+        if (Math.abs(px - sx) < threshold) return 'right';
+      }
+      return null;
+    }
+
+    // Pointer events
+    canvas.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const p = getPos(e);
+      isDragging = true;
+      dragStart = p;
+
+      if (mode === 'hwall') {
+        // Check if hitting existing line to drag it
+        const hit = hitWallLine(p.x, p.y);
+        if (hit === 'top' || hit === 'bottom') {
+          wallDragType = hit;
+        } else {
+          // Start new line (will decide top/bottom on release based on position)
+          wallDragType = 'newH';
+          tempWallY = toImageCoords(p).y;
+        }
+        draw();
+      } else if (mode === 'vwall') {
+        const hit = hitWallLine(p.x, p.y);
+        if (hit === 'left' || hit === 'right') {
+          wallDragType = hit;
+        } else {
+          wallDragType = 'newV';
+          tempWallX = toImageCoords(p).x;
+        }
+        draw();
+      } else if (mode === 'block') {
+        const idx = hitBlock(p.x, p.y);
+        if (idx >= 0) {
+          selectedBlock = idx;
+        } else {
+          const imgP = toImageCoords(p);
+          const size = 40 / scale;
+          blocks.push({ x: imgP.x - size/2, y: imgP.y - size/2, w: size, h: size });
+          selectedBlock = blocks.length - 1;
+          draw();
+        }
+      } else if (mode === 'char') {
+        const imgP = toImageCoords(p);
+        charPos = { x: imgP.x, y: imgP.y };
+        aimDir = null;
+        firstHitPoint = null;
+        firstHitWall = null;
+        draggingFirstHit = false;
+        if (pathConfirmed) setPathConfirmed(false);
+        draw();
+      } else if (mode === 'aim' && charPos) {
+        const imgP = toImageCoords(p);
+        // 既存の1反射目マーカーを掴んだら壁沿いドラッグ
+        if (hitFirstHitMarker(p.x, p.y)) {
+          draggingFirstHit = true;
+          statusMsg.textContent = firstHitWall === 'top' || firstHitWall === 'bottom'
+            ? '1反射目を左右にスライドして微調整'
+            : '1反射目を上下にスライドして微調整';
+          draw();
+        } else {
+          // 壁タップで1反射目を指定
+          const hit = projectToNearestWall(imgP);
+          if (hit) {
+            setAimFromFirstHit(hit);
+            draggingFirstHit = true; // 置いた直後もスライド可能
+            statusMsg.textContent = `1反射目: ${hit.wall === 'top' ? '上壁' : hit.wall === 'bottom' ? '下壁' : hit.wall === 'left' ? '左壁' : '右壁'}（スライドで微調整可）`;
+            draw();
+          }
+          // 壁以外なら後でスワイプ照準に使う
+        }
+      }
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (!isDragging) return;
+      e.preventDefault();
+      const p = getPos(e);
+      const imgP = toImageCoords(p);
+
+      if (mode === 'hwall') {
+        if (wallDragType === 'top') {
+          topWallY = imgP.y;
+        } else if (wallDragType === 'bottom') {
+          bottomWallY = imgP.y;
+        } else if (wallDragType === 'newH') {
+          tempWallY = imgP.y;
+        }
+        draw();
+      } else if (mode === 'vwall') {
+        if (wallDragType === 'left') {
+          leftWallX = imgP.x;
+        } else if (wallDragType === 'right') {
+          rightWallX = imgP.x;
+        } else if (wallDragType === 'newV') {
+          tempWallX = imgP.x;
+        }
+        draw();
+      } else if (mode === 'block' && selectedBlock !== null) {
+        const b = blocks[selectedBlock];
+        b.x = imgP.x - b.w / 2;
+        b.y = imgP.y - b.h / 2;
+        draw();
+      } else if (mode === 'aim' && charPos) {
+        if (draggingFirstHit && firstHitPoint) {
+          // 1反射目を壁に沿って移動
+          moveFirstHitAlongWall(imgP);
+          statusMsg.textContent = firstHitWall === 'top' || firstHitWall === 'bottom'
+            ? '1反射目を左右に微調整中'
+            : '1反射目を上下に微調整中';
+          draw();
+        } else {
+          // スワイプ照準（引っ張った反対方向）
+          const dx = charPos.x - imgP.x;
+          const dy = charPos.y - imgP.y;
+          const len = Math.hypot(dx, dy) || 1;
+          const screenDist = Math.hypot(p.x - dragStart.x, p.y - dragStart.y);
+          if (screenDist > 12) {
+            aimDir = { dx: dx / len, dy: dy / len };
+            firstHitPoint = null;
+            firstHitWall = null;
+            if (pathConfirmed) setPathConfirmed(false);
+            statusMsg.textContent = 'スワイプで方向指定中';
+            draw();
+          }
+        }
+      }
+    });
+
+    canvas.addEventListener('pointerup', (e) => {
+      let wallsChanged = false;
+
+      if (mode === 'hwall') {
+        if (wallDragType === 'newH' && tempWallY !== null) {
+          // Decide if this is top or bottom based on current values
+          if (topWallY === null || topWallY === 0) {
+            topWallY = tempWallY;
+            statusMsg.textContent = '上壁をセットしました。次は下壁を置いてください';
+          } else if (bottomWallY === null || bottomWallY === (bgImage ? bgImage.height : 1500)) {
+            bottomWallY = tempWallY;
+            if (topWallY > bottomWallY) {
+              const t = topWallY;
+              topWallY = bottomWallY;
+              bottomWallY = t;
+            }
+            statusMsg.textContent = '上下壁をセットしました（保存済み）';
+          } else {
+            if (Math.abs(tempWallY - topWallY) < Math.abs(tempWallY - bottomWallY)) {
+              topWallY = tempWallY;
+            } else {
+              bottomWallY = tempWallY;
+            }
+            if (topWallY > bottomWallY) {
+              const t = topWallY;
+              topWallY = bottomWallY;
+              bottomWallY = t;
+            }
+            statusMsg.textContent = '壁の位置を更新しました（保存済み）';
+          }
+          tempWallY = null;
+          wallsChanged = true;
+        } else if (wallDragType === 'top' || wallDragType === 'bottom') {
+          // Dragged existing line
+          if (topWallY > bottomWallY) {
+            const t = topWallY;
+            topWallY = bottomWallY;
+            bottomWallY = t;
+          }
+          statusMsg.textContent = '壁の位置を更新しました（保存済み）';
+          wallsChanged = true;
+        }
+      }
+
+      if (mode === 'vwall') {
+        if (wallDragType === 'newV' && tempWallX !== null) {
+          if (leftWallX === null || leftWallX === 0) {
+            leftWallX = tempWallX;
+            statusMsg.textContent = '左壁をセットしました。次は右壁を置いてください';
+          } else if (rightWallX === null || rightWallX === (bgImage ? bgImage.width : 1000)) {
+            rightWallX = tempWallX;
+            if (leftWallX > rightWallX) {
+              const t = leftWallX;
+              leftWallX = rightWallX;
+              rightWallX = t;
+            }
+            statusMsg.textContent = '左右壁をセットしました（保存済み）';
+          } else {
+            if (Math.abs(tempWallX - leftWallX) < Math.abs(tempWallX - rightWallX)) {
+              leftWallX = tempWallX;
+            } else {
+              rightWallX = tempWallX;
+            }
+            if (leftWallX > rightWallX) {
+              const t = leftWallX;
+              leftWallX = rightWallX;
+              rightWallX = t;
+            }
+            statusMsg.textContent = '壁の位置を更新しました（保存済み）';
+          }
+          tempWallX = null;
+          wallsChanged = true;
+        } else if (wallDragType === 'left' || wallDragType === 'right') {
+          if (leftWallX > rightWallX) {
+            const t = leftWallX;
+            leftWallX = rightWallX;
+            rightWallX = t;
+          }
+          statusMsg.textContent = '壁の位置を更新しました（保存済み）';
+          wallsChanged = true;
+        }
+      }
+
+      if (wallsChanged) {
+        if (bgImage) lastImageSize = { w: bgImage.width, h: bgImage.height };
+        saveWalls();
+      }
+
+      isDragging = false;
+      selectedBlock = null;
+      wallDragType = null;
+      draggingFirstHit = false;
+      draw();
+    });
+
+    canvas.addEventListener('pointercancel', () => {
+      isDragging = false;
+      selectedBlock = null;
+      wallDragType = null;
+      draggingFirstHit = false;
+      tempWallY = null;
+      tempWallX = null;
+    });
+
+    // Double tap delete block
+    let lastTap = 0;
+    canvas.addEventListener('pointerup', (e) => {
+      const now = Date.now();
+      if (mode === 'block' && now - lastTap < 300) {
+        const p = getPos(e);
+        const idx = hitBlock(p.x, p.y);
+        if (idx >= 0) {
+          blocks.splice(idx, 1);
+          draw();
+        }
+      }
+      lastTap = now;
+    });
+
+    // Physics using the custom walls
+    function simulatePath(start, dir, maxB) {
+      const path = [{ x: start.x, y: start.y }];
+      let pos = { x: start.x, y: start.y };
+      let d = { x: dir.dx, y: dir.dy };
+      const eps = 0.001;
+      const maxDist = 5000;
+
+      const fieldW = bgImage ? bgImage.width : 1000;
+      const fieldH = bgImage ? bgImage.height : 1500;
+
+      const tY = topWallY !== null ? topWallY : 0;
+      const bY = bottomWallY !== null ? bottomWallY : fieldH;
+      const lX = leftWallX !== null ? leftWallX : 0;
+      const rX = rightWallX !== null ? rightWallX : fieldW;
+
+      // Outer walls as thin rectangles
+      const walls = [
+        { x: lX - 20, y: tY - 20, w: (rX - lX) + 40, h: 20 },   // top
+        { x: lX - 20, y: bY,       w: (rX - lX) + 40, h: 20 },   // bottom
+        { x: lX - 20, y: tY - 20,  w: 20, h: (bY - tY) + 40 },   // left
+        { x: rX,      y: tY - 20,  w: 20, h: (bY - tY) + 40 },   // right
+        ...blocks
+      ];
+
+      for (let bounce = 0; bounce < maxB; bounce++) {
+        let nearestT = Infinity;
+        let hitNormal = null;
+        let hitPoint = null;
+
+        for (const b of walls) {
+          const invDx = d.x !== 0 ? 1 / d.x : Infinity;
+          const invDy = d.y !== 0 ? 1 / d.y : Infinity;
+
+          let t1 = (b.x - pos.x) * invDx;
+          let t2 = (b.x + b.w - pos.x) * invDx;
+          let t3 = (b.y - pos.y) * invDy;
+          let t4 = (b.y + b.h - pos.y) * invDy;
+
+          const tmin = Math.max(Math.min(t1, t2), Math.min(t3, t4));
+          const tmax = Math.min(Math.max(t1, t2), Math.max(t3, t4));
+
+          if (tmax < 0 || tmin > tmax || tmin <= eps) continue;
+          if (tmin >= nearestT) continue;
+
+          nearestT = tmin;
+          const hx = pos.x + d.x * tmin;
+          const hy = pos.y + d.y * tmin;
+          hitPoint = { x: hx, y: hy };
+
+          const leftDist = Math.abs(hx - b.x);
+          const rightDist = Math.abs(hx - (b.x + b.w));
+          const topDist = Math.abs(hy - b.y);
+          const bottomDist = Math.abs(hy - (b.y + b.h));
+          const minD = Math.min(leftDist, rightDist, topDist, bottomDist);
+
+          if (minD === leftDist) hitNormal = { x: -1, y: 0 };
+          else if (minD === rightDist) hitNormal = { x: 1, y: 0 };
+          else if (minD === topDist) hitNormal = { x: 0, y: -1 };
+          else hitNormal = { x: 0, y: 1 };
+        }
+
+        if (!hitPoint || nearestT > maxDist) {
+          path.push({ x: pos.x + d.x * 800, y: pos.y + d.y * 800 });
+          break;
+        }
+
+        path.push(hitPoint);
+
+        const dot = d.x * hitNormal.x + d.y * hitNormal.y;
+        d = {
+          x: d.x - 2 * dot * hitNormal.x,
+          y: d.y - 2 * dot * hitNormal.y
+        };
+
+        pos = {
+          x: hitPoint.x + d.x * eps * 2,
+          y: hitPoint.y + d.y * eps * 2
+        };
+      }
+
+      return path;
+    }
+
+    // Draw
+    function draw() {
+      const w = canvas.width / devicePixelRatio;
+      const h = canvas.height / devicePixelRatio;
+      ctx.clearRect(0, 0, w, h);
+
+      if (bgImage) {
+        ctx.drawImage(bgImage, offsetX, offsetY, bgImage.width * scale, bgImage.height * scale);
+
+        if (showEdges && edgeCanvas) {
+          ctx.globalAlpha = 0.75;
+          ctx.drawImage(edgeCanvas, offsetX, offsetY, bgImage.width * scale, bgImage.height * scale);
+          ctx.globalAlpha = 1.0;
+        }
+      } else {
+        ctx.fillStyle = '#1a1a24';
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#555';
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('スクショを読み込んでください', w / 2, h / 2);
+      }
+
+      // Draw fixed horizontal walls (top / bottom)
+      const drawHLine = (yImg, color, label) => {
+        if (yImg === null) return;
+        const sy = toScreenCoords({x: 0, y: yImg}).y;
+        ctx.beginPath();
+        ctx.moveTo(0, sy);
+        ctx.lineTo(w, sy);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.setLineDash([8, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // label
+        ctx.fillStyle = color;
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(label, 8, sy - 6);
+      };
+
+      const drawVLine = (xImg, color, label) => {
+        if (xImg === null) return;
+        const sx = toScreenCoords({x: xImg, y: 0}).x;
+        ctx.beginPath();
+        ctx.moveTo(sx, 0);
+        ctx.lineTo(sx, h);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.setLineDash([8, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = color;
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(label, sx + 6, 16);
+      };
+
+      // Permanent walls（軌道確定中は非表示）
+      if (!pathConfirmed) {
+        drawHLine(topWallY, '#00e676', '上壁');
+        drawHLine(bottomWallY, '#00e676', '下壁');
+        drawVLine(leftWallX, '#00e676', '左壁');
+        drawVLine(rightWallX, '#00e676', '右壁');
+      }
+
+      // Temporary line while dragging
+      if (!pathConfirmed && tempWallY !== null) {
+        drawHLine(tempWallY, '#ffeb3b', '配置中...');
+      }
+      if (!pathConfirmed && tempWallX !== null) {
+        drawVLine(tempWallX, '#ffeb3b', '配置中...');
+      }
+
+      // Blocks
+      for (const b of blocks) {
+        const s = toScreenCoords({ x: b.x, y: b.y });
+        ctx.fillStyle = 'rgba(255, 152, 0, 0.45)';
+        ctx.strokeStyle = '#ff9800';
+        ctx.lineWidth = 2;
+        ctx.fillRect(s.x, s.y, b.w * scale, b.h * scale);
+        ctx.strokeRect(s.x, s.y, b.w * scale, b.h * scale);
+      }
+
+      // Character
+      if (charPos) {
+        const s = toScreenCoords(charPos);
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, 12, 0, Math.PI * 2);
+        ctx.fillStyle = '#e53935';
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        if (aimDir && mode === 'aim' && !firstHitPoint) {
+          const pullLen = 40;
+          ctx.beginPath();
+          ctx.moveTo(s.x, s.y);
+          ctx.lineTo(s.x - aimDir.dx * pullLen, s.y - aimDir.dy * pullLen);
+          ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 4]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }
+
+      // 1反射目の指定点（確定後は非表示）
+      if (firstHitPoint && !pathConfirmed) {
+        const fp = toScreenCoords(firstHitPoint);
+        ctx.beginPath();
+        ctx.arc(fp.x, fp.y, 10, 0, Math.PI * 2);
+        ctx.fillStyle = '#00e5ff';
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = '#00e5ff';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('1', fp.x, fp.y - 14);
+      }
+
+      // Path
+      if (charPos && aimDir) {
+        const path = simulatePath(charPos, aimDir, maxBounces);
+        if (path.length > 1) {
+          ctx.beginPath();
+          const startS = toScreenCoords(path[0]);
+          ctx.moveTo(startS.x, startS.y);
+          for (let i = 1; i < path.length; i++) {
+            const p = toScreenCoords(path[i]);
+            ctx.lineTo(p.x, p.y);
+          }
+          ctx.strokeStyle = 'rgba(255, 80, 80, 0.9)';
+          ctx.lineWidth = pathConfirmed ? lineWidth + 1 : lineWidth;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.stroke();
+
+          // 確定後は番号・反射点マーカーを消して軌道だけ残す
+          if (!pathConfirmed) {
+            for (let i = 1; i < path.length; i++) {
+              const p = toScreenCoords(path[i]);
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+              ctx.fillStyle = '#ff9800';
+              ctx.fill();
+              ctx.fillStyle = '#000';
+              ctx.font = 'bold 11px sans-serif';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(i, p.x, p.y);
+            }
+          }
+        }
+      }
+    }
+
+    draw();
+  </script>
+</body>
+</html>
